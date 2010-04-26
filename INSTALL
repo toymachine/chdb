@@ -1,0 +1,11 @@
+To create and install the chdb PHP extension:
+
+do:
+
+phpize
+./configure --enable-chdb
+sudo make install
+
+To create the python module needed to create a hashmap:
+
+sudo python setup.py install

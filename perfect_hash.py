@@ -225,7 +225,7 @@ class Graph:
             if pos > width: print '\n ', ; pos = 0
         print ']'
 
-def generate_hash(kvs, c = 1.1):
+def generate_hash(kvs, c = 1.1, db = 'hash.chdb'):
     """Print out code for a perfect minimal hash.  Input is a list of
     (key, desired hash value) tuples.  """
 
@@ -294,7 +294,7 @@ def generate_hash(kvs, c = 1.1):
     def write_int(f, i):
         f.write(struct.pack("!I", i))
 
-    f = open('hash.chdb', 'wb')
+    f = open(db, 'wb')
     f.write("CHDB")
     write_int(f, 1) #version number
     write_int(f, N) #size of G
@@ -340,6 +340,6 @@ if __name__ == '__main__':
         else:
             keys.add(key)
         kvs.append((key, value))
-    generate_hash( kvs, 1.7 )
+    generate_hash( kvs, 1.7, sys.argv[2])
     f.close()
 

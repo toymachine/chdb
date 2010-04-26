@@ -21,4 +21,5 @@ Release
 *.lo
 *.so
 hash.chdb
-
+dist
+chdb.egg-info/
