@@ -45,7 +45,7 @@ if test "$PHP_CHDB" != "no"; then
 
   dnl # --with-chdb -> check for lib and symbol presence
   dnl LIBNAME=chdb # you may want to change this
-  dnl LIBSYMBOL=chdb # you most likely want to change this 
+  dnl LIBSYMBOL=chdb # you most likely want to change this
 
   dnl PHP_CHECK_LIBRARY($LIBNAME,$LIBSYMBOL,
   dnl [
@@ -59,5 +59,5 @@ if test "$PHP_CHDB" != "no"; then
   dnl
   dnl PHP_SUBST(CHDB_SHARED_LIBADD)
 
-  PHP_NEW_EXTENSION(chdb, chdb.c, $ext_shared)
+  PHP_NEW_EXTENSION(chdb, php_chdb.c chdb.c, $ext_shared)
 fi

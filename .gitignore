@@ -14,3 +14,11 @@ chdb.la
 chdb.lo
 build
 autom4*
+Debug
+Release
+*.pyc
+*~
+*.lo
+*.so
+hash.chdb
+

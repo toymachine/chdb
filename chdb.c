@@ -1,182 +1,182 @@
-/*
-  +----------------------------------------------------------------------+
-  | PHP Version 5                                                        |
-  +----------------------------------------------------------------------+
-  | Copyright (c) 1997-2007 The PHP Group                                |
-  +----------------------------------------------------------------------+
-  | This source file is subject to version 3.01 of the PHP license,      |
-  | that is bundled with this package in the file LICENSE, and is        |
-  | available through the world-wide-web at the following url:           |
-  | http://www.php.net/license/3_01.txt                                  |
-  | If you did not receive a copy of the PHP license and are unable to   |
-  | obtain it through the world-wide-web, please send a note to          |
-  | license@php.net so we can mail you a copy immediately.               |
-  +----------------------------------------------------------------------+
-  | Author:                                                              |
-  +----------------------------------------------------------------------+
-*/
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/mman.h>
+#include <arpa/inet.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <stdlib.h>
 
-/* $Id: header,v 1.16.2.1.2.1 2007/01/01 19:32:09 iliaa Exp $ */
+//unsigned int MurmurHashNeutral2 ( const void * key, int len, unsigned int seed )
+//(http://sites.google.com/site/murmurhash/)
+unsigned int murmurhash( const void * key, int len, unsigned int seed )
+{
+    //printf("mmhash: %.*s, len: %d, seed: %u\n", len, (char *)key, len, seed);
 
-#ifdef HAVE_CONFIG_H
-#include "config.h"
-#endif
+    const unsigned int m = 0x5bd1e995;
+    const int r = 24;
 
-#include "php.h"
-#include "php_ini.h"
-#include "ext/standard/info.h"
-#include "php_chdb.h"
+    unsigned int h = seed ^ len;
 
-/* If you declare any globals in php_chdb.h uncomment this:
-ZEND_DECLARE_MODULE_GLOBALS(chdb)
-*/
+    const unsigned char * data = (const unsigned char *)key;
 
-/* True global resources - no need for thread safety here */
-static int le_chdb;
+    while(len >= 4)
+    {
+        unsigned int k;
 
-/* {{{ chdb_functions[]
+        k  = data[0];
+        k |= data[1] << 8;
+        k |= data[2] << 16;
+        k |= data[3] << 24;
+
+        k *= m;
+        k ^= k >> r;
+        k *= m;
+
+        h *= m;
+        h ^= k;
+
+        data += 4;
+        len -= 4;
+    }
+
+    switch(len)
+    {
+    case 3: h ^= data[2] << 16;
+    case 2: h ^= data[1] << 8;
+    case 1: h ^= data[0];
+            h *= m;
+    };
+
+    h ^= h >> 13;
+    h *= m;
+    h ^= h >> 15;
+
+    return h;
+}
+
+typedef struct _CHDB CHDB;
+
+struct _CHDB
+{
+    int fd;
+    char *map;
+    int version;
+    int N;
+    int K;
+    int junk1;
+    int junk2;
+    size_t G_offset;
+    size_t V_offset;
+};
+
+int _chdb_read_int(const CHDB *chdb, size_t offset)
+{
+    return ntohl(*((int *)(chdb->map + offset)));
+}
+
+/**
+ * structure of chdb
  *
- * Every user visible function must have an entry in chdb_functions[].
+ * |+++++++++++|
+ * | meta data | magic, version, number of keys (K), size of hashfunction table (N), f1 junk and f2 junk
+ * |+++++++++++|
+ * | graph (G) | graph part of the perfect hash (N * 4 bytes)
+ * |+++++++++++|
+ * | offsets   | offsets of key/value pairs indexed by hash (K * 4 bytes)
+ * |+++++++++++|
+ * | kv pairs  | actual key/value pairs, each items is 4 bytes key len KL, KL bytes key, 4 bytes value len VL, VL bytes value
+ * |+++++++++++|
  */
-zend_function_entry chdb_functions[] = {
-	PHP_FE(confirm_chdb_compiled,	NULL)		/* For testing, remove later. */
-	{NULL, NULL, NULL}	/* Must be the last line in chdb_functions[] */
-};
-/* }}} */
-
-/* {{{ chdb_module_entry
- */
-zend_module_entry chdb_module_entry = {
-#if ZEND_MODULE_API_NO >= 20010901
-	STANDARD_MODULE_HEADER,
-#endif
-	"chdb",
-	chdb_functions,
-	PHP_MINIT(chdb),
-	PHP_MSHUTDOWN(chdb),
-	PHP_RINIT(chdb),		/* Replace with NULL if there's nothing to do at request start */
-	PHP_RSHUTDOWN(chdb),	/* Replace with NULL if there's nothing to do at request end */
-	PHP_MINFO(chdb),
-#if ZEND_MODULE_API_NO >= 20010901
-	"0.1", /* Replace with version number for your extension */
-#endif
-	STANDARD_MODULE_PROPERTIES
-};
-/* }}} */
-
-#ifdef COMPILE_DL_CHDB
-ZEND_GET_MODULE(chdb)
-#endif
-
-/* {{{ PHP_INI
- */
-/* Remove comments and fill if you need to have entries in php.ini
-PHP_INI_BEGIN()
-    STD_PHP_INI_ENTRY("chdb.global_value",      "42", PHP_INI_ALL, OnUpdateLong, global_value, zend_chdb_globals, chdb_globals)
-    STD_PHP_INI_ENTRY("chdb.global_string", "foobar", PHP_INI_ALL, OnUpdateString, global_string, zend_chdb_globals, chdb_globals)
-PHP_INI_END()
-*/
-/* }}} */
-
-/* {{{ php_chdb_init_globals
- */
-/* Uncomment this function if you have INI entries
-static void php_chdb_init_globals(zend_chdb_globals *chdb_globals)
+CHDB *chdb_open(const char *pathname)
 {
-	chdb_globals->global_value = 0;
-	chdb_globals->global_string = NULL;
-}
-*/
-/* }}} */
+    int fd = open(pathname, O_RDONLY);
+    if(fd == -1) {
+        printf("could not open file: %s", pathname);
+        abort();
+    }
+    struct stat st;
+    if(-1 == fstat(fd, &st)) {
+        printf("could not stat");
+        abort();
+    }
+    char *map = mmap(NULL, st.st_size, PROT_READ, MAP_SHARED, fd, 0);
+    if(MAP_FAILED == map) {
+        printf("could not map");
+        abort();
+    }
 
-/* {{{ PHP_MINIT_FUNCTION
- */
-PHP_MINIT_FUNCTION(chdb)
+    CHDB *chdb = malloc(sizeof(CHDB));
+    chdb->fd = fd;
+    chdb->map = map;
+
+    size_t offset = 0;
+
+    if(0 != strncmp(chdb->map, "CHDB", 4)) {
+        printf("not a chdb file");
+        abort();
+    }
+    offset +=4;
+    chdb->version = _chdb_read_int(chdb, offset);
+    offset +=4;
+    chdb->N = _chdb_read_int(chdb, offset);
+    offset +=4;
+    chdb->K = _chdb_read_int(chdb, offset);
+    offset +=4;
+    chdb->junk1 = _chdb_read_int(chdb, offset);
+    offset +=4;
+    chdb->junk2 = _chdb_read_int(chdb, offset);
+    offset += 4;
+    chdb->G_offset = offset;
+    chdb->V_offset = chdb->G_offset + (chdb->N * 4);
+
+    //printf("version: %d, N: %d, K: %d\n", chdb->version, chdb->N, chdb->K);
+    //printf("junk1: %u, junk2: %u\n", chdb->junk1, chdb->junk2);
+    //printf("G_offset: %d, V_offset: %d\n", chdb->G_offset, chdb->V_offset);
+
+    return chdb;
+}
+
+unsigned int _chdb_perfecthash(const CHDB *chdb, const char *key, size_t key_len)
 {
-	/* If you have INI entries, uncomment these lines 
-	REGISTER_INI_ENTRIES();
-	*/
-	return SUCCESS;
-}
-/* }}} */
+    #define G(i) (_chdb_read_int(chdb, chdb->G_offset + (i * 4)))
+    #define F1() (murmurhash(key, key_len, chdb->junk1) % chdb->N)
+    #define F2() (murmurhash(key, key_len, chdb->junk2) % chdb->N)
 
-/* {{{ PHP_MSHUTDOWN_FUNCTION
- */
-PHP_MSHUTDOWN_FUNCTION(chdb)
+    //printf("f1: %d\n", murmurhash(key, key_len, chdb->junk1) % chdb->N);
+    //printf("f2: %d\n", murmurhash(key, key_len, chdb->junk2) % chdb->N);
+
+    return ( G(F1()) + G(F2())) % chdb->N;
+}
+
+
+int chdb_get(const CHDB *chdb, const char *key, size_t key_len, char **value, size_t *value_len)
 {
-	/* uncomment this line if you have INI entries
-	UNREGISTER_INI_ENTRIES();
-	*/
-	return SUCCESS;
+    *value = NULL;
+    *value_len = 0;
+
+    //printf("lookup key: %.*s, len: %d\n", key_len, key, key_len);
+    unsigned int hash = _chdb_perfecthash(chdb, key, key_len);
+    //printf("hash: %u, K: %d\n", hash, chdb->K);
+    if(hash == 0 || hash > chdb->K) {
+        //printf("-1 1\n");
+        return -1;
+    }
+
+    size_t kv_offset = _chdb_read_int(chdb, chdb->V_offset + (hash * 4));
+    size_t key_found_len = _chdb_read_int(chdb, kv_offset);
+    char *key_found = chdb->map + kv_offset + 4;
+    if((key_found_len != key_len) ||
+        (0 != strncmp(key, key_found, key_len))) {
+        //printf("-1 2 %.*s, %.*s\n", key_len, key, key_found_len, key_found);
+        return -1;
+    }
+
+    size_t value_offset = kv_offset + 4 + key_found_len;
+    *value_len = _chdb_read_int(chdb, value_offset);
+    *value = chdb->map + value_offset + 4;
+
+    return 0;
 }
-/* }}} */
 
-/* Remove if there's nothing to do at request start */
-/* {{{ PHP_RINIT_FUNCTION
- */
-PHP_RINIT_FUNCTION(chdb)
-{
-	return SUCCESS;
-}
-/* }}} */
-
-/* Remove if there's nothing to do at request end */
-/* {{{ PHP_RSHUTDOWN_FUNCTION
- */
-PHP_RSHUTDOWN_FUNCTION(chdb)
-{
-	return SUCCESS;
-}
-/* }}} */
-
-/* {{{ PHP_MINFO_FUNCTION
- */
-PHP_MINFO_FUNCTION(chdb)
-{
-	php_info_print_table_start();
-	php_info_print_table_header(2, "chdb support", "enabled");
-	php_info_print_table_end();
-
-	/* Remove comments if you have entries in php.ini
-	DISPLAY_INI_ENTRIES();
-	*/
-}
-/* }}} */
-
-
-/* Remove the following function when you have succesfully modified config.m4
-   so that your module can be compiled into PHP, it exists only for testing
-   purposes. */
-
-/* Every user-visible function in PHP should document itself in the source */
-/* {{{ proto string confirm_chdb_compiled(string arg)
-   Return a string to confirm that the module is compiled in */
-PHP_FUNCTION(confirm_chdb_compiled)
-{
-	char *arg = NULL;
-	int arg_len, len;
-	char *strg;
-
-	if (zend_parse_parameters(ZEND_NUM_ARGS() TSRMLS_CC, "s", &arg, &arg_len) == FAILURE) {
-		return;
-	}
-
-	len = spprintf(&strg, 0, "Congratulations! You have successfully modified ext/%.78s/config.m4. Module %.78s is now compiled into PHP.", "chdb", arg);
-	RETURN_STRINGL(strg, len, 0);
-}
-/* }}} */
-/* The previous line is meant for vim and emacs, so it can correctly fold and 
-   unfold functions in source code. See the corresponding marks just before 
-   function definition, where the functions purpose is also documented. Please 
-   follow this convention for the convenience of others editing your code.
-*/
-
-
-/*
- * Local variables:
- * tab-width: 4
- * c-basic-offset: 4
- * End:
- * vim600: noet sw=4 ts=4 fdm=marker
- * vim<600: noet sw=4 ts=4
- */
