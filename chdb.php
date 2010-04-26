@@ -2,6 +2,12 @@
 
 $chdb = chdb_open("hash.chdb");
 
-echo $chdb->get("WWW_WRITE_NOT_ENABLED"), PHP_EOL;
+$value = $chdb->get($argv[1]);
+if($value === false) {
+    echo "!not found!", PHP_EOL;
+}
+else {
+    echo $value, PHP_EOL;
+}
 
 ?>

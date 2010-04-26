@@ -334,7 +334,7 @@ if __name__ == '__main__':
         line = line[:-1]
         key, value = line.split('\t', 1)
         key = key.strip()
-        print repr(key), repr(value)
+        print repr(key), repr(value[0:20])
         if key in keys:
             assert False, "duplicate key"
         else:

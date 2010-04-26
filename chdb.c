@@ -89,6 +89,8 @@ int _chdb_read_int(const CHDB *chdb, size_t offset)
  * | kv pairs  | actual key/value pairs, each items is 4 bytes key len KL, KL bytes key, 4 bytes value len VL, VL bytes value
  * |+++++++++++|
  */
+
+//TODO not abort, but cleanup and return null, and set some lib error
 CHDB *chdb_open(const char *pathname)
 {
     int fd = open(pathname, O_RDONLY);
