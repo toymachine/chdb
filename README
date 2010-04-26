@@ -22,4 +22,18 @@ Potentially this file can be huge, as only those portions that are actually read
 by the operating system.
 Also the memory that is used will be shared by all running php-instances that have the same map 'opened'.
 
+Use the script 'perfect_hash.py' to create the hashmap at deploy-time (note this script will be ported to php in the future):
+
+python perfect_hash.py <input-file> hash.chdb
+
+This will create a hashmap 'hash.chdb' from the input file. The input file contains a key-value pair on each
+line with key and value seperated by a tab ('\t').
+
+From php you can now use the hashmap like this:
+
+
+$chdb = chdb_open("hash.chdb");
+$value = $chdb->get("SOME_KEY");
+
+$value will === false when key is not found.
 
