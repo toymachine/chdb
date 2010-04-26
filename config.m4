@@ -13,9 +13,9 @@ dnl [  --with-chdb             Include chdb support])
 
 dnl Otherwise use enable:
 
-dnl PHP_ARG_ENABLE(chdb, whether to enable chdb support,
+PHP_ARG_ENABLE(chdb, whether to enable chdb support,
 dnl Make sure that the comment is aligned:
-dnl [  --enable-chdb           Enable chdb support])
+[  --enable-chdb           Enable chdb support])
 
 if test "$PHP_CHDB" != "no"; then
   dnl Write more examples of tests here...
