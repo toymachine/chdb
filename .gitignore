@@ -1,0 +1,16 @@
+*.m4
+config*
+Makefile*
+.libs
+.deps
+install-sh
+libtool
+missing
+ltmain.sh
+mkinstalldirs
+modules
+run-tests.php
+chdb.la
+chdb.lo
+build
+autom4*
